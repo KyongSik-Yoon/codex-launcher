@@ -407,23 +407,20 @@ class CodexLauncherConfigurable : SearchableConfigurable {
         enableNotificationCheckbox.isEnabled = !isWslSelected
         enableCdProjectRootCheckbox.isEnabled = !isWslSelected
 
+        val fileHandlingTooltip = if (isWslSelected) {
+            "File Handling is unavailable when WSL shell is selected."
+        } else {
+            null
+        }
+        
         mcpConfigInputArea.toolTipText = if (isWslSelected) {
             "Integrated MCP Server is unavailable when WSL shell is selected."
         } else {
             null
         }
 
-        openFileOnChangeCheckbox.toolTipText = if (isWslSelected) {
-            "File Handling is unavailable when WSL shell is selected."
-        } else {
-            null
-        }
-
-        showDiffOnChangeCheckbox.toolTipText = if (isWslSelected) {
-            "File Handling is unavailable when WSL shell is selected."
-        } else {
-            null
-        }
+        openFileOnChangeCheckbox.toolTipText = fileHandlingTooltip
+        showDiffOnChangeCheckbox.toolTipText = fileHandlingTooltip
 
         enableNotificationCheckbox.toolTipText = if (isWslSelected) {
             "Notifications are unavailable when WSL shell is selected."

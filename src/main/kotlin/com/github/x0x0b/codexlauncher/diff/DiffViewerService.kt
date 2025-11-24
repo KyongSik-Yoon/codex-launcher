@@ -25,8 +25,9 @@ class DiffViewerService(private val project: Project) : Disposable {
     private val fileSnapshots = mutableMapOf<String, String>()
     
     /**
-     * Captures the current state of all files in the project that might be modified.
+     * Captures the current state of the specified files.
      * Should be called before Codex runs.
+     * @param files List of files to capture snapshots for
      */
     fun captureFileSnapshots(files: List<VirtualFile>) {
         ApplicationManager.getApplication().runReadAction {
