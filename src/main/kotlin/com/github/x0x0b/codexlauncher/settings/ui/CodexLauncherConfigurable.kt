@@ -45,6 +45,7 @@ class CodexLauncherConfigurable : SearchableConfigurable {
     private lateinit var customModelField: JBTextField
     private lateinit var modelReasoningEffortCombo: JComboBox<ModelReasoningEffort>
     private lateinit var openFileOnChangeCheckbox: JBCheckBox
+    private lateinit var showDiffOnChangeCheckbox: JBCheckBox
     private lateinit var enableNotificationCheckbox: JBCheckBox
     private lateinit var enableSearchCheckbox: JBCheckBox
     private lateinit var enableCdProjectRootCheckbox: JBCheckBox
@@ -92,6 +93,7 @@ class CodexLauncherConfigurable : SearchableConfigurable {
 
         // File opening control
         openFileOnChangeCheckbox = JBCheckBox("Open files automatically when changed")
+        showDiffOnChangeCheckbox = JBCheckBox("Show diff viewer for files modified by Codex")
         fileHandlingWarningLabel = JBLabel("File Handling is unavailable when WSL shell is selected.").apply {
             foreground = UIUtil.getErrorForeground()
             border = JBUI.Borders.emptyTop(4)
@@ -222,6 +224,9 @@ class CodexLauncherConfigurable : SearchableConfigurable {
                     cell(openFileOnChangeCheckbox)
                 }
                 row {
+                    cell(showDiffOnChangeCheckbox)
+                }
+                row {
                     this.largeComment("Changes will take effect after restarting Codex.")
                 }
             }
@@ -281,6 +286,7 @@ class CodexLauncherConfigurable : SearchableConfigurable {
                 getCustomModel() != s.customModel ||
                 getModelReasoningEffort() != s.modelReasoningEffort ||
                 getOpenFileOnChange() != s.openFileOnChange ||
+                getShowDiffOnChange() != s.showDiffOnChange ||
                 getEnableNotification() != s.enableNotification ||
                 getEnableSearch() != s.enableSearch ||
                 getEnableCdProjectRoot() != s.enableCdProjectRoot ||
@@ -301,6 +307,7 @@ class CodexLauncherConfigurable : SearchableConfigurable {
         s.customModel = getCustomModel()
         s.modelReasoningEffort = getModelReasoningEffort()
         s.openFileOnChange = getOpenFileOnChange()
+        s.showDiffOnChange = getShowDiffOnChange()
         s.enableNotification = getEnableNotification()
         s.enableSearch = getEnableSearch()
         s.enableCdProjectRoot = getEnableCdProjectRoot()
@@ -320,6 +327,7 @@ class CodexLauncherConfigurable : SearchableConfigurable {
         customModelField.isEnabled = (s.model == Model.CUSTOM)
         modelReasoningEffortCombo.selectedItem = s.modelReasoningEffort
         openFileOnChangeCheckbox.isSelected = s.openFileOnChange
+        showDiffOnChangeCheckbox.isSelected = s.showDiffOnChange
         enableNotificationCheckbox.isSelected = s.enableNotification
         enableSearchCheckbox.isSelected = s.enableSearch
         enableCdProjectRootCheckbox.isSelected = s.enableCdProjectRoot
@@ -348,6 +356,10 @@ class CodexLauncherConfigurable : SearchableConfigurable {
 
     private fun getOpenFileOnChange(): Boolean {
         return openFileOnChangeCheckbox.isSelected
+    }
+
+    private fun getShowDiffOnChange(): Boolean {
+        return showDiffOnChangeCheckbox.isSelected
     }
 
     private fun getEnableNotification(): Boolean {
@@ -391,20 +403,24 @@ class CodexLauncherConfigurable : SearchableConfigurable {
 
         mcpConfigInputArea.isEnabled = !isWslSelected
         openFileOnChangeCheckbox.isEnabled = !isWslSelected
+        showDiffOnChangeCheckbox.isEnabled = !isWslSelected
         enableNotificationCheckbox.isEnabled = !isWslSelected
         enableCdProjectRootCheckbox.isEnabled = !isWslSelected
 
+        val fileHandlingTooltip = if (isWslSelected) {
+            "File Handling is unavailable when WSL shell is selected."
+        } else {
+            null
+        }
+        
         mcpConfigInputArea.toolTipText = if (isWslSelected) {
             "Integrated MCP Server is unavailable when WSL shell is selected."
         } else {
             null
         }
 
-        openFileOnChangeCheckbox.toolTipText = if (isWslSelected) {
-            "File Handling is unavailable when WSL shell is selected."
-        } else {
-            null
-        }
+        openFileOnChangeCheckbox.toolTipText = fileHandlingTooltip
+        showDiffOnChangeCheckbox.toolTipText = fileHandlingTooltip
 
         enableNotificationCheckbox.toolTipText = if (isWslSelected) {
             "Notifications are unavailable when WSL shell is selected."

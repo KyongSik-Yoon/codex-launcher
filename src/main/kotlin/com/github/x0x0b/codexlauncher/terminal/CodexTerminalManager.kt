@@ -2,6 +2,7 @@ package com.github.x0x0b.codexlauncher.terminal
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
@@ -10,6 +11,9 @@ import com.intellij.terminal.ui.TerminalWidget
 import com.intellij.ui.content.Content
 import org.jetbrains.plugins.terminal.TerminalToolWindowManager
 import org.jetbrains.plugins.terminal.TerminalToolWindowFactory
+import com.github.x0x0b.codexlauncher.diff.DiffViewerService
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.roots.ProjectFileIndex
 
 /**
  * Project-level service responsible for managing Codex terminals.
@@ -30,9 +34,13 @@ class CodexTerminalManager(private val project: Project) {
 
     /**
      * Launches or reuses the Codex terminal for the given command.
+     * Captures file snapshots before running Codex for diff comparison.
      * @throws Throwable when terminal creation or command execution fails.
      */
     fun launch(baseDir: String, command: String) {
+        // Capture snapshots of open files before Codex runs
+        captureFileSnapshots()
+        
         val terminalManager = TerminalToolWindowManager.getInstance(project)
         var existingTerminal = locateCodexTerminal(terminalManager)
 
@@ -67,6 +75,24 @@ class CodexTerminalManager(private val project: Project) {
         } catch (sendError: Throwable) {
             widget?.let { clearCodexMetadata(terminalManager, it) }
             throw sendError
+        }
+    }
+    
+    /**
+     * Captures snapshots of currently open files for later diff comparison.
+     */
+    private fun captureFileSnapshots() {
+        try {
+            val diffViewerService = project.service<DiffViewerService>()
+            val fileEditorManager = FileEditorManager.getInstance(project)
+            val openFiles = fileEditorManager.openFiles.toList()
+            
+            if (openFiles.isNotEmpty()) {
+                diffViewerService.captureFileSnapshots(openFiles)
+                logger.info("Captured snapshots of ${openFiles.size} open files")
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to capture file snapshots", e)
         }
     }
 

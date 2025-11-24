@@ -10,6 +10,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.github.x0x0b.codexlauncher.settings.CodexLauncherSettings
+import com.github.x0x0b.codexlauncher.diff.DiffViewerService
 import com.intellij.openapi.vcs.changes.InvokeAfterUpdateMode
 import com.intellij.openapi.diagnostic.logger
 
@@ -43,6 +44,7 @@ class FileOpenService(private val project: Project) : Disposable {
     /**
      * Processes recently changed files and opens them in the editor if configured to do so.
      * This includes both tracked (version-controlled) and untracked (new) files.
+     * Also shows diffs for modified files if enabled.
      */
     fun processChangedFilesAndOpen() {
         val changeListManager = ChangeListManager.getInstance(project)
@@ -53,6 +55,11 @@ class FileOpenService(private val project: Project) : Disposable {
             val filesToOpen = mutableSetOf<VirtualFile>()
             collectTrackedChangedFiles(changeListManager, thresholdTime, filesToOpen)
             collectUntrackedFiles(changeListManager, thresholdTime, filesToOpen)
+            
+            // Show diffs for modified files if enabled
+            val diffViewerService = project.service<DiffViewerService>()
+            diffViewerService.showDiffsForModifiedFiles(filesToOpen.toList())
+            
             openCollectedFiles(filesToOpen)
         }, InvokeAfterUpdateMode.SYNCHRONOUS_NOT_CANCELLABLE, null, null)
     }
