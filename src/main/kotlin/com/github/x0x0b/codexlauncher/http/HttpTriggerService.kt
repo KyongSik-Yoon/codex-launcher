@@ -146,6 +146,11 @@ class HttpTriggerService : Disposable {
                         notificationService.notifyRefreshReceived(notificationMessage)
                     }
 
+                    // Show diffs for changed files if enabled
+                    if (settings.state.showDiffOnChange) {
+                        fileOpenService.processChangedFilesAndShowDiffs()
+                    }
+
                     // Process changed files and open
                     if (settings.state.openFileOnChange) {
                         fileOpenService.processChangedFilesAndOpen()

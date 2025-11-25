@@ -44,7 +44,6 @@ class FileOpenService(private val project: Project) : Disposable {
     /**
      * Processes recently changed files and opens them in the editor if configured to do so.
      * This includes both tracked (version-controlled) and untracked (new) files.
-     * Also shows diffs for modified files if enabled.
      */
     fun processChangedFilesAndOpen() {
         val changeListManager = ChangeListManager.getInstance(project)
@@ -56,11 +55,27 @@ class FileOpenService(private val project: Project) : Disposable {
             collectTrackedChangedFiles(changeListManager, thresholdTime, filesToOpen)
             collectUntrackedFiles(changeListManager, thresholdTime, filesToOpen)
             
+            openCollectedFiles(filesToOpen)
+        }, InvokeAfterUpdateMode.SYNCHRONOUS_NOT_CANCELLABLE, null, null)
+    }
+    
+    /**
+     * Processes recently changed files and shows diffs for them if enabled.
+     * This includes both tracked (version-controlled) and untracked (new) files.
+     */
+    fun processChangedFilesAndShowDiffs() {
+        val changeListManager = ChangeListManager.getInstance(project)
+        changeListManager.invokeAfterUpdate({
+            val thresholdTime = calculateThresholdTime()
+            waitForVcsUpdate()
+            
+            val changedFiles = mutableSetOf<VirtualFile>()
+            collectTrackedChangedFiles(changeListManager, thresholdTime, changedFiles)
+            collectUntrackedFiles(changeListManager, thresholdTime, changedFiles)
+            
             // Show diffs for modified files if enabled
             val diffViewerService = project.service<DiffViewerService>()
-            diffViewerService.showDiffsForModifiedFiles(filesToOpen.toList())
-            
-            openCollectedFiles(filesToOpen)
+            diffViewerService.showDiffsForModifiedFiles(changedFiles.toList())
         }, InvokeAfterUpdateMode.SYNCHRONOUS_NOT_CANCELLABLE, null, null)
     }
     
