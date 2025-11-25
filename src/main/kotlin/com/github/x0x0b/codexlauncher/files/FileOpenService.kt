@@ -56,7 +56,7 @@ class FileOpenService(private val project: Project) : Disposable {
     /**
      * Processes recently changed files and shows diffs for them.
      * This includes both tracked (version-controlled) and untracked (new) files.
-     * The actual diff display is delegated to DiffViewerService which checks the showDiffOnChange setting.
+     * Note: Caller should check showDiffOnChange setting before calling this method.
      */
     fun processChangedFilesAndShowDiffs() {
         val changeListManager = ChangeListManager.getInstance(project)
