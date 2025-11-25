@@ -65,9 +65,9 @@ class DiffViewerService(private val project: Project) : Disposable {
     
     /**
      * Shows diff for files that have been modified since the snapshot was taken.
-     * @param modifiedFiles List of files that have been modified
+     * @param modifiedFiles Collection of files that have been modified
      */
-    fun showDiffsForModifiedFiles(modifiedFiles: List<VirtualFile>) {
+    fun showDiffsForModifiedFiles(modifiedFiles: Collection<VirtualFile>) {
         val settings = service<CodexLauncherSettings>()
         if (!settings.state.showDiffOnChange) {
             logger.debug("Diff view is disabled in settings")
