@@ -48,14 +48,8 @@ class FileOpenService(private val project: Project) : Disposable {
     fun processChangedFilesAndOpen() {
         val changeListManager = ChangeListManager.getInstance(project)
         changeListManager.invokeAfterUpdate({
-            val thresholdTime = calculateThresholdTime()
-            waitForVcsUpdate()
-            
-            val filesToOpen = mutableSetOf<VirtualFile>()
-            collectTrackedChangedFiles(changeListManager, thresholdTime, filesToOpen)
-            collectUntrackedFiles(changeListManager, thresholdTime, filesToOpen)
-            
-            openCollectedFiles(filesToOpen)
+            val changedFiles = collectChangedFiles(changeListManager)
+            openCollectedFiles(changedFiles)
         }, InvokeAfterUpdateMode.SYNCHRONOUS_NOT_CANCELLABLE, null, null)
     }
     
@@ -66,17 +60,25 @@ class FileOpenService(private val project: Project) : Disposable {
     fun processChangedFilesAndShowDiffs() {
         val changeListManager = ChangeListManager.getInstance(project)
         changeListManager.invokeAfterUpdate({
-            val thresholdTime = calculateThresholdTime()
-            waitForVcsUpdate()
+            val changedFiles = collectChangedFiles(changeListManager)
             
-            val changedFiles = mutableSetOf<VirtualFile>()
-            collectTrackedChangedFiles(changeListManager, thresholdTime, changedFiles)
-            collectUntrackedFiles(changeListManager, thresholdTime, changedFiles)
-            
-            // Show diffs for modified files if enabled
+            // Show diffs for modified files
             val diffViewerService = project.service<DiffViewerService>()
             diffViewerService.showDiffsForModifiedFiles(changedFiles.toList())
         }, InvokeAfterUpdateMode.SYNCHRONOUS_NOT_CANCELLABLE, null, null)
+    }
+    
+    /**
+     * Collects all recently changed files, both tracked and untracked.
+     */
+    private fun collectChangedFiles(changeListManager: ChangeListManager): Set<VirtualFile> {
+        val thresholdTime = calculateThresholdTime()
+        waitForVcsUpdate()
+        
+        val changedFiles = mutableSetOf<VirtualFile>()
+        collectTrackedChangedFiles(changeListManager, thresholdTime, changedFiles)
+        collectUntrackedFiles(changeListManager, thresholdTime, changedFiles)
+        return changedFiles
     }
     
     /**
