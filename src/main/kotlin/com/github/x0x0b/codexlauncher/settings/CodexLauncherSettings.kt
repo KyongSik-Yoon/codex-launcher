@@ -35,6 +35,7 @@ class CodexLauncherSettings : PersistentStateComponent<CodexLauncherSettings.Sta
      * @property model The selected model for codex
      * @property customModel Custom model identifier when model is set to CUSTOM
      * @property openFileOnChange Whether to automatically open files when they change
+     * @property openDiffOnChange Whether to automatically open a diff view for changed files
      * @property enableNotification Whether to enable notifications
      * @property enableSearch Whether to launch Codex CLI with --enable web_search_request flag
      * @property enableCdProjectRoot Whether to pass the project root via --cd
@@ -47,6 +48,7 @@ class CodexLauncherSettings : PersistentStateComponent<CodexLauncherSettings.Sta
         var customModel: String = "",
         var modelReasoningEffort: ModelReasoningEffort = ModelReasoningEffort.DEFAULT,
         var openFileOnChange: Boolean = false,
+        var openDiffOnChange: Boolean = false,
         var enableNotification: Boolean = false,
         var enableSearch: Boolean = false,
         var enableCdProjectRoot: Boolean = false,

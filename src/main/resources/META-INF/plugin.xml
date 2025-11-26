@@ -74,6 +74,14 @@
       <!-- Also put it in the Tools menu for discoverability -->
       <add-to-group group-id="ToolsMenu" anchor="last"/>
     </action>
+    <action id="com.github.x0x0b.codexlauncher.revertCodexChanges"
+      class="com.github.x0x0b.codexlauncher.actions.RevertCodexChangesAction"
+      text="Revert Codex Changes"
+      description="Revert the current file to its state before the last Codex run">
+      <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="RevertCode"/>
+      <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+    </action>
     <action id="com.github.x0x0b.codexlauncher.sendRange"
       class="com.github.x0x0b.codexlauncher.actions.SendRangeToCodexAction"
       text="Send Selection/Class to Codex"

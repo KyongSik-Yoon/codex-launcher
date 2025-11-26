@@ -107,7 +107,7 @@ object CodexArgsBuilder {
         // Windows/WSL ignores notify and MCP config
         if (!(osProvider.isWindows && state.winShell == WinShell.WSL)) {
             // Add notify command if port is provided and not using WSL
-            if (port != null && (state.enableNotification || state.openFileOnChange)) {
+            if (port != null && (state.enableNotification || state.openFileOnChange || state.openDiffOnChange)) {
                 parts += buildNotifyCommand(port, osProvider, state.winShell)
             }
 

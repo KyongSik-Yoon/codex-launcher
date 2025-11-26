@@ -9,7 +9,13 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vcs.changes.ChangeListManager
+import com.intellij.openapi.vcs.changes.Change
+import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.DiffManager
+import com.intellij.diff.requests.SimpleDiffRequest
 import com.github.x0x0b.codexlauncher.settings.CodexLauncherSettings
+import com.github.x0x0b.codexlauncher.diff.CodexChangeSnapshotService
+import com.github.x0x0b.codexlauncher.diff.CodexPreviewStateService
 import com.intellij.openapi.vcs.changes.InvokeAfterUpdateMode
 import com.intellij.openapi.diagnostic.logger
 
@@ -122,8 +128,34 @@ class FileOpenService(private val project: Project) : Disposable {
      * Opens all collected files in the editor.
      */
     private fun openCollectedFiles(filesToOpen: Set<VirtualFile>) {
+        val changeListManager = ChangeListManager.getInstance(project)
+        val settings = service<CodexLauncherSettings>()
+        val snapshotService = project.service<CodexChangeSnapshotService>()
+        val previewState = project.service<CodexPreviewStateService>()
+
+        val openDiff = settings.state.openDiffOnChange
+        val openFile = settings.state.openFileOnChange
+
+        logger.info("CodexLauncher: processing ${filesToOpen.size} changed files (openDiff=$openDiff, openFile=$openFile)")
+
         for (file in filesToOpen) {
-            openFileInEditor(file)
+            val change = changeListManager.getChange(file)
+
+            // Record snapshot for potential revert-before/after Codex review
+            snapshotService.recordSnapshot(change, file)
+
+            if (openDiff && change != null) {
+                // If a Codex preview diff was already shown for this file, skip the
+                // follow-up VCS diff after /refresh to avoid duplicate popups.
+                if (!previewState.consumePreviewShown(file.path)) {
+                    showDiff(change)
+                } else {
+                    logger.info("CodexLauncher: skipping VCS diff for ${file.path} (Codex preview already shown)")
+                }
+            }
+            if (openFile) {
+                openFileInEditor(file)
+            }
         }
     }
     
@@ -160,6 +192,60 @@ class FileOpenService(private val project: Project) : Disposable {
             }
         } catch (e: Exception) {
             logger.error("Error in openFileInEditor for file: ${file.path}", e)
+        }
+    }
+
+    private fun showDiff(change: Change) {
+        try {
+            val settings = service<CodexLauncherSettings>()
+            if (!settings.state.openDiffOnChange) {
+                return
+            }
+
+            val projectRef = project
+            if (projectRef.isDisposed) {
+                logger.debug("Project disposed, skipping diff view for change: ${change}")
+                return
+            }
+
+            val filePath = change.afterRevision?.file?.path
+                ?: change.beforeRevision?.file?.path
+                ?: ""
+            logger.info("CodexLauncher: preparing diff view for change in '$filePath'")
+
+            ApplicationManager.getApplication().invokeLater {
+                if (projectRef.isDisposed) {
+                    return@invokeLater
+                }
+                try {
+                    val beforeText = change.beforeRevision?.content ?: ""
+                    val afterText = change.afterRevision?.content ?: ""
+
+                    val diffContentFactory = DiffContentFactory.getInstance()
+                    val beforeContent = diffContentFactory.create(projectRef, beforeText)
+                    val afterContent = diffContentFactory.create(projectRef, afterText)
+
+                    val title = if (filePath.isNotEmpty()) {
+                        "Changes in $filePath"
+                    } else {
+                        "Changes"
+                    }
+
+                    val request = SimpleDiffRequest(
+                        title,
+                        beforeContent,
+                        afterContent,
+                        "Before",
+                        "After"
+                    )
+
+                    DiffManager.getInstance().showDiff(projectRef, request)
+                } catch (e: Exception) {
+                    logger.warn("Failed to show diff for change: ${change}", e)
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("Error while preparing diff view for change: ${change}", e)
         }
     }
 

@@ -1,6 +1,7 @@
 package com.github.x0x0b.codexlauncher.http
 
 import com.github.x0x0b.codexlauncher.files.FileOpenService
+import com.github.x0x0b.codexlauncher.diff.DiffViewService
 import com.github.x0x0b.codexlauncher.notifications.NotificationService
 import com.github.x0x0b.codexlauncher.settings.CodexLauncherSettings
 import com.intellij.openapi.Disposable
@@ -31,6 +32,7 @@ class HttpTriggerService : Disposable {
         private const val SERVER_SHUTDOWN_TIMEOUT_SECONDS = 1
         private const val LOCALHOST = "localhost"
         private const val REFRESH_ENDPOINT = "/refresh"
+        private const val OPEN_DIFF_ENDPOINT = "/openDiff"
         private const val HTTP_METHOD_POST = "POST"
         private const val CONTENT_TYPE_PLAIN_TEXT = "text/plain; charset=utf-8"
 
@@ -65,6 +67,11 @@ class HttpTriggerService : Disposable {
                 handleRefreshRequest(exchange)
             }
 
+            // Endpoint to open a suggestion diff view
+            server?.createContext(OPEN_DIFF_ENDPOINT) { exchange ->
+                handleOpenDiffRequest(exchange)
+            }
+
             server?.executor = Executors.newCachedThreadPool()
             server?.start()
 
@@ -74,6 +81,63 @@ class HttpTriggerService : Disposable {
 
         } catch (e: Exception) {
             logger.error("Failed to start HTTP server: ${e.message}", e)
+        }
+    }
+
+    private fun handleOpenDiffRequest(exchange: HttpExchange) {
+        try {
+            val requestMethod = exchange.requestMethod
+
+            if (requestMethod != HTTP_METHOD_POST) {
+                sendResponse(exchange, HTTP_METHOD_NOT_ALLOWED, MSG_METHOD_NOT_ALLOWED)
+                return
+            }
+
+            val requestBody = exchange.requestBody.bufferedReader().use { it.readText() }
+            if (requestBody.isEmpty()) {
+                sendResponse(exchange, HTTP_INTERNAL_SERVER_ERROR, "Empty request body")
+                return
+            }
+
+            val json = try {
+                Json.parseToJsonElement(requestBody) as JsonObject
+            } catch (e: Exception) {
+                logger.warn("Failed to parse openDiff payload as JSON: ${e.message}")
+                sendResponse(exchange, HTTP_INTERNAL_SERVER_ERROR, MSG_INTERNAL_ERROR)
+                return
+            }
+
+            val filePath = json["filePath"]?.jsonPrimitive?.content
+            val newContent = json["newContent"]?.jsonPrimitive?.content
+
+            if (filePath.isNullOrBlank()) {
+                sendResponse(exchange, HTTP_INTERNAL_SERVER_ERROR, "Missing filePath")
+                return
+            }
+
+            val suggestion = newContent ?: ""
+
+            // Show diff only for projects that contain the file under their base path
+            val openProjects = ProjectManager.getInstance().openProjects
+            ApplicationManager.getApplication().invokeLater {
+                for (project in openProjects) {
+                    val basePath = project.basePath
+                    if (project.isDisposed || basePath.isNullOrBlank()) continue
+                    if (!filePath.startsWith(basePath)) continue
+
+                    try {
+                        val diffService = project.service<DiffViewService>()
+                        diffService.showSuggestionDiff(filePath, suggestion)
+                    } catch (e: Exception) {
+                        logger.warn("Failed to show suggestion diff for project ${project.name}: ${e.message}")
+                    }
+                }
+            }
+
+            sendResponse(exchange, HTTP_OK, "")
+        } catch (e: Exception) {
+            logger.error("Error handling openDiff request", e)
+            sendResponse(exchange, HTTP_INTERNAL_SERVER_ERROR, MSG_INTERNAL_ERROR)
         }
     }
 
@@ -146,8 +210,8 @@ class HttpTriggerService : Disposable {
                         notificationService.notifyRefreshReceived(notificationMessage)
                     }
 
-                    // Process changed files and open
-                    if (settings.state.openFileOnChange) {
+                    // Process changed files for file-open and/or diff view
+                    if (settings.state.openFileOnChange || settings.state.openDiffOnChange) {
                         fileOpenService.processChangedFilesAndOpen()
                     }
 

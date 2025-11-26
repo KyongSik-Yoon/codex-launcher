@@ -14,6 +14,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.IconLoader
+import com.intellij.openapi.util.SystemInfo
 import javax.swing.Icon
 
 class LaunchCodexAction : AnAction(DEFAULT_TEXT, DEFAULT_DESCRIPTION, null), DumbAware {
@@ -88,7 +89,9 @@ class LaunchCodexAction : AnAction(DEFAULT_TEXT, DEFAULT_DESCRIPTION, null), Dum
             }
 
             val settings = service<CodexLauncherSettings>()
-            val command = buildCommand(settings.getArgs(port, baseDir))
+            val args = settings.getArgs(port, baseDir)
+            val usePagerCat = settings.state.openDiffOnChange && !SystemInfo.isWindows
+            val command = buildCommand(args, usePagerCat)
             terminalManager.launch(baseDir, command)
             logger.info("Codex command executed successfully: $command")
         } catch (t: Throwable) {
@@ -97,8 +100,11 @@ class LaunchCodexAction : AnAction(DEFAULT_TEXT, DEFAULT_DESCRIPTION, null), Dum
         }
     }
 
-    private fun buildCommand(args: String): String {
+    private fun buildCommand(args: String, usePagerCat: Boolean): String {
         return buildString {
+            if (usePagerCat) {
+                append("PAGER=cat ")
+            }
             append(CODEX_COMMAND)
             if (args.isNotBlank()) {
                 append(' ')
