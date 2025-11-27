@@ -48,3 +48,4 @@ gha-creds-*.json
 
 .idea
 .tool-versions
+kls_database.db
