@@ -2,6 +2,10 @@ package com.github.x0x0b.codexlauncher.terminal
 
 import com.github.x0x0b.codexlauncher.diff.DiffViewService
 import com.github.x0x0b.codexlauncher.diff.CodexPreviewStateService
+import com.github.x0x0b.codexlauncher.diff.CodexOutputParser
+import com.github.x0x0b.codexlauncher.diff.CodexPreview
+import com.github.x0x0b.codexlauncher.diff.CodexEdit
+import com.github.x0x0b.codexlauncher.diff.CodexLineType
 import com.github.x0x0b.codexlauncher.settings.CodexLauncherSettings
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
@@ -36,44 +40,6 @@ class CodexTerminalManager(private val project: Project) {
     private val logger = logger<CodexTerminalManager>()
 
     private data class CodexTerminal(val widget: TerminalWidget, val content: Content)
-
-    private enum class CodexLineType { CONTEXT, ADD, DELETE }
-
-    /**
-     * Single line entry parsed from Codex's "Would you like to make the following edits?"
-     * preview block.
-     *
-     * IMPORTANT FORMAT ASSUMPTIONS:
-     * - [lineNumber] is a 1-based line index referring to the *original* file contents
-     *   at the time Codex generated the preview.
-     * - CONTEXT lines correspond to unchanged lines in the original file.
-     * - DELETE lines correspond to lines that exist in the original file and will be removed.
-     * - ADD lines correspond to new lines that will be inserted at [lineNumber], after
-     *   accounting for any prior insertions/removals at earlier line numbers.
-     *
-     * The patch application logic below is *entirely* based on these assumptions. If the
-     * Codex preview format changes (e.g. numbers become post-change, or context semantics
-     * differ), the algorithm in [applyPreviewToFullFile] must be revisited.
-     */
-    private data class CodexEdit(
-        val lineNumber: Int,
-        val type: CodexLineType,
-        val text: String
-    )
-
-    /**
-     * Parsed representation of a single Codex preview block for one file.
-     *
-     * [originalSnippet] / [suggestedSnippet] are kept primarily for fallback snippet diff
-     * rendering. [edits] is the canonical structure used to build a full-file suggestion
-     * via [applyPreviewToFullFile].
-     */
-    private data class CodexPreview(
-        val filePath: String,
-        val originalSnippet: String,
-        val suggestedSnippet: String,
-        val edits: List<CodexEdit>
-    )
 
     // Monitor scheduled for the currently running Codex terminal (at most one per project)
     @Volatile
@@ -355,7 +321,7 @@ class CodexTerminalManager(private val project: Project) {
                 }
                 lastPreviewFingerprint = fingerprint
 
-                val preview = extractCodexPreview(text) ?: return@scheduleWithFixedDelay
+                val preview = CodexOutputParser.parsePreview(text) ?: return@scheduleWithFixedDelay
 
                 logger.info("CodexLauncher: detected Codex preview diff, opening preview")
                 openDiffPreviewFromSummary(preview)
@@ -394,131 +360,6 @@ class CodexTerminalManager(private val project: Project) {
             }
             method.invoke(shellWidget, fn) as? String
         }.getOrNull()
-    }
-
-    /**
-     * Extracts a Codex preview block of the form:
-     *
-     *   Would you like to make the following edits?
-     *
-     *     path/to/File.kt (+A -D)
-     *
-     *       18      }
-     *       19 +    new line
-     *       20 -    removed line
-     *       21      context
-     *
-     * and builds original/suggested snippets from it.
-     */
-    private fun extractCodexPreview(fullText: String): CodexPreview? {
-        val marker = "Would you like to make the following edits?"
-        val markerIndex = fullText.lastIndexOf(marker)
-        if (markerIndex == -1) return null
-
-        val tail = fullText.substring(markerIndex)
-        val lines = tail.lines()
-
-        // Find path line: "  path (+A -D)"
-        val pathRegex = Regex("""^\s*(.+?)\s+\(\+(\d+)\s+-(\d+)\)\s*$""")
-        var path: String? = null
-        var idx = 0
-        while (idx < lines.size) {
-            val m = pathRegex.matchEntire(lines[idx])
-            if (m != null) {
-                path = m.groupValues[1].trim()
-                idx++
-                break
-            }
-            idx++
-        }
-        if (path == null) return null
-
-        // Collect preview lines until we hit the options (1. Yes, proceed ...)
-        val edits = mutableListOf<CodexEdit>()
-        while (idx < lines.size) {
-            val raw = lines[idx]
-            val trimmed = raw.trim()
-            if (trimmed.startsWith("1. Yes") || trimmed.contains("Yes, proceed")) {
-                break
-            }
-            // skip obvious non-code markers
-            if (trimmed.isEmpty() || trimmed == "⋮") {
-                idx++
-                continue
-            }
-            // Expect lines like "    19 +    text"
-            val noIndent = raw.trimStart()
-            val numberPart = noIndent.takeWhile { it.isDigit() }
-            if (numberPart.isEmpty()) {
-                idx++
-                continue
-            }
-            val lineNumber = numberPart.toIntOrNull()
-            if (lineNumber == null) {
-                idx++
-                continue
-            }
-
-            var rest = noIndent.drop(numberPart.length)
-            if (rest.isEmpty()) {
-                idx++
-                continue
-            }
-
-            // Find first non-space character after the line number.
-            val firstNonWsIndex = rest.indexOfFirst { !it.isWhitespace() }
-            if (firstNonWsIndex == -1) {
-                idx++
-                continue
-            }
-
-            val c = rest[firstNonWsIndex]
-            val type: CodexLineType
-            when (c) {
-                '+' -> {
-                    type = CodexLineType.ADD
-                    // Remove just the '+' while preserving indentation and content.
-                    rest = rest.removeRange(firstNonWsIndex, firstNonWsIndex + 1)
-                }
-                '-' -> {
-                    type = CodexLineType.DELETE
-                    rest = rest.removeRange(firstNonWsIndex, firstNonWsIndex + 1)
-                }
-                else -> {
-                    type = CodexLineType.CONTEXT
-                }
-            }
-
-            edits += CodexEdit(lineNumber, type, rest)
-            idx++
-        }
-
-        if (edits.isEmpty()) return null
-
-        val previewLines = edits.map { it.type to it.text }
-
-        val original = mutableListOf<String>()
-        val suggested = mutableListOf<String>()
-
-        for ((type, text) in previewLines) {
-            when (type) {
-                CodexLineType.CONTEXT -> {
-                    original += text
-                    suggested += text
-                }
-                CodexLineType.ADD -> {
-                    suggested += text
-                }
-                CodexLineType.DELETE -> {
-                    original += text
-                }
-            }
-        }
-
-        val originalSnippet = original.joinToString("\n")
-        val suggestedSnippet = suggested.joinToString("\n")
-
-        return CodexPreview(path, originalSnippet, suggestedSnippet, edits.toList())
     }
 
     /**
